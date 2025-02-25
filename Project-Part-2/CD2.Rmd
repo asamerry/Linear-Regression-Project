@@ -1,0 +1,182 @@
+---
+title: "Coding Project Part 2"
+author: "Jake Merry"
+date: "12.06.24"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+subtitle: Making Use of the 'Diamond Prices' Dataset
+---
+
+
+## Introduction
+
+For Part 1 of the Diamond Data Set project, we took a random sample of 500 observations from our data set, we described each variable in the data set, provided summary statistics, and made note of an discrepancies that could potentially influence our analysis.  
+
+Now, for Part 2, we aim to address any issues that may arise in our sample from Part 1 due to multicollinearity and to find the best fitting model for said sample. To do this, we will run model diagnostics is order to ensure that residuals are homoscedastic and normally distributed, and check for any influential points within our sample. 
+
+Following, we will make use of the packages `readr` to access our dataset, `car` for use of the `vif` function to check for multicollinearity, and `MASS` for the `boxcox` function to help us find a proper transformation for our response variable. 
+
+```{r setup, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.height=4)
+
+library(readr)
+library(car)
+library(MASS)
+
+diamondData <- read_csv("cd2_dataset.csv")
+```
+
+To maintain consistency, we parse the same observations from the data set that we used in Part 1. 
+
+```{r Data Sample}
+set.seed(5)
+
+diamondSample <- diamondData[
+  sample(1:nrow(diamondData), 500), 
+  c("carat", "color", "clarity", "depth", "table", "price")
+]
+diamondSample
+```
+
+Recall from Part 1 that our sample is dealing specifically with the variables `carat`, `color`, `clarity`, `depth`, `table`, and `price`. Here, our dependent variable is `price`; it represents that value we aim to estimate. 
+
+
+## Fitting a Multiple Regression Model
+
+To create a model for the data set, we will use the `lm` function that will create a multiple linear regression model for the data. Note that our sample includes categorical variables, for which the `lm` function will automatically add dummy variables for us. 
+
+```{r Multiple Regression Model}
+mlr <- lm(formula=price~., data=diamondSample)
+summary(mlr)
+```
+
+Now that we have a base model for comparison, we can use the Akaike Information Criterion method for variable selection to attempt to find a model that better fits our data. We will also use backward selection to attempt to remove any variable from the current model that are inhibiting its ability to accurately predict the response variable. 
+
+```{r AIC Backward Variable Selection}
+step(mlr, direction="backward")
+```
+
+As we can see, AIC backward selection did not remove any variable from our model. This means that the predictors that we currently have in our model form the best model according to this method. 
+
+Now, a few notes:
+
+- Notice that the number of dummy variables added for each categorical variable is one less that the number of unique categories that each variable contains. 
+- At this point, it is also worth noting that the Adjusted $R^2$ value for the model is 0.9344, which is already very close to 1. However, we shall continue to attempt to increase this value to ensure that we find the best model for our data. 
+-Also notice that the standard error of our residuals has an unexpectedly high value of 988.1. We should keep an eye on this value as we attempt to improve our model in an attempt to lower this value. 
+
+## Addressing Multicollinearity 
+
+The next step to ensuring that we find the best model is by analyzing the variable present in our model to ensure that none of them are highly correlated with each other which would cause unreliable estimates of our response. 
+
+We can first analyze the correlation of each of the quantitative variables in the model by creating a pair plot and correlation table. 
+
+```{r Pairplot}
+pairs(
+  diamondSample[c("carat", "depth", "table", "price")],
+  pch = 16, 
+  label = c("Carat", "Depth", "Table", "Price"),
+  main = "Pairplot of Continuous Variables"
+)
+```
+
+```{r Correlation Table}
+cor(diamondSample[c("carat", "depth", "table", "price")])
+```
+
+As we can see, the only variables that are highly correlated are `carat` and `price`, however, since `price` is our response variable, this is to be expected and will provide better predictions rather than hinder our model. 
+
+We will as well use the `vif` function to directly analyze any multicollinearity within the model. Any variable with a value greater than 5 should be dropped from the model. 
+
+```{r Variance Inflation Factor}
+vif(mlr)
+```
+
+Using the Variance Inflation Factor, we can see again that there is not any significant multicollinearity within our model. Notice, however, that the `vif` function also includes our categorical variables so that we can analyze multicollinearity between all explanatory variables, rather than just the variables that have quantitative values. 
+
+
+## Model Diagnostics
+
+There are still a few things that we need to check in our model to ensure that we create the best model for our data. These include checking for heteroscedasticity, linearity, normality, and linearity, as well as ensuring that there are no influential points swaying our model away from the true best-fit line. 
+
+Let's create some plots of our model to make this a bit easier. Each of the following graphs will tell us something different about our model. 
+
+```{r Plot for Heteroscedasticity}
+plot(mlr, 1)
+```
+
+Here, we can see that the variance of our residuals are non-constant, i.e. our model is heteroscedastic. Specifically, our residuals form an outward opening funnel. Ideally, we would be able to find some vertical limits that contain our residual values. This is the first problem with our model. 
+
+```{r Plot for Normality}
+plot(mlr, 2)
+```
+
+The QQ plot us shows that our residuals are not exactly normally distributed since there are some observations that clearly vary from the mean response much more than others. 
+
+```{r Plot for Influential Points}
+plot(mlr, 4)
+```
+
+And from this final plot, we see that our model may have some influential points that could be swaying our response prediction away from its true value. 
+
+To deal with the problems of heteroscedasticity and non-normality, we can attempt a transformation of one or more of our variables. We will use the Box-Cox method in order to find the transformation that will work best for our model. 
+
+```{r}
+lambda <- boxcox(mlr, lambda = seq(-2, 2, by = 0.1))$x[
+  which.max(boxcox(mlr, lambda = seq(-2, 2, by = 0.1))$y)
+]
+lambda
+```
+
+Since the value returned to us is very close to 0.5, we know that the best transformation for our response variable is a square root transformation. Let's apply this now. 
+
+```{r Square Root Transformation}
+mlr.sqrt <- lm(formula=sqrt(price)~., data=diamondSample)
+summary(mlr.sqrt)
+plot(mlr.sqrt, c(1, 2, 4))
+
+n = 500
+p = 5
+threshold <- 4/(n-p-1)
+abline(h=threshold, col="red")
+```
+
+We can see that this transformation has significantly improved our model, however, it is still not perfect. Notice that for the plot of Cook's Distance, we have now added a line representing the threshold that we do not want our residuals to exceed. Any point that falls above this line need to be investigated. Since there seems to be a considerable amount of these points, this could be what is preventing us from finding the best-fitting model for our data. 
+
+We can get a list of the Cook's Distances for each of our observations and use this to delete any unwanted data.
+
+```{r Cleaning the Sample}
+cooks <- cooks.distance(mlr.sqrt)
+rev(sort(round(cooks, 5)))[1:10]
+
+diamondSample_clean <- diamondSample[-which(cooks > threshold), ]
+
+mlr.new <- lm(formula=sqrt(price)~., data=diamondSample_clean)
+summary(mlr.new)
+plot(mlr.new, c(1, 2, 4))
+```
+
+Now that we have cleaned up our sample data a bit, our model looks much better. We can see that the have grouped closer together, indicating a homoscedastic model, and our residuals now follow much closer to the normal distribution that we were looking for. 
+
+As well, we can see that our adjusted $R^2$ value has increased to 0.98, even closer to a perfect fit than when we started, and the standard error of our residuals has significantly decreased from our first model, moving from 988.1, all the way down to 3.591. A clear improvement to our model. 
+
+It appears that this model is the best-fitting model for our data that we currently have the tools to find. The model that we found could potentially be improved in the future by running additional diagnostics, but the improvements that we have made are significant and the summary values that have been returned indicate a fairly accurate model. 
+
+
+## Final Notes
+
+- Notice that when we run the multiple regression model for our sample, R does a good job at adding dummy variables to incorporate the categorical variables into the model. However, each new variable has a different significance level. So, for each categorical variable, we must analyze the significance of the variable as a whole rather than analyzing the significance of each category individually. 
+- Although our original regression model ended up being very close to the model that we chose in the end, it was important to continue to check for any issues (multicollinearity, heteroscedasticity, etc.) that may have arisen in the model, inhibiting our ability to predict the response variable. 
+- The biggest hindrance to our model was the fact that there were a large number of influential points within our sample. This cause our model to overestimate our response variable since some of our observations varied too far from the rest of our data to be of any use. Removing these points allowed us to draw much more accurate conclusions about our response variable. 
+
+
+
+
+
+
+
+

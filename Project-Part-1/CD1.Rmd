@@ -1,0 +1,186 @@
+---
+title: "Coding Project Part 1"
+author: "Jake Merry"
+date: "11.06.24"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+subtitle: Making Use of the 'Diamond Prices' Dataset
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readr)
+library(ggplot2)
+```
+
+
+## Introduction
+
+For this project we will be analyzing the "Diamonds Prices" dataset from Kaggle. Our goal for this project is to analyze the dataset in order to explore relationships between the variables and provide statistical summaries for a sample of the data. 
+
+This dataset contains information on almost 54,000 diamonds. Let's import our dataset: 
+```{r Data Import, message=FALSE, warning=FALSE}
+library(skimr)
+diamondData <- read_csv("cd1_dataset.csv")
+```
+
+In order to get a better initial understanding of the data, we can simply examine the first few rows of the dataset by use of the `head` function. 
+```{r Data Head}
+head(diamondData)
+```
+
+We see that there are 11 fields each corresponding to a different diamond characteristic. Let's take a closer look at each field individually and what they represent by using the `names` function to return each column name from the dataset. 
+
+```{r Data Names}
+names(diamondData)
+```
+
+- `Index`: This field is a record of the observation number of each diamond. Each entry in this field is a unique positive integer, numbered 1 through 53943. 
+- `Carat`: This is a measure of the weight of each diamond. Each carat is equal to exactly 200 milligrams or 1/5 of a gram. 
+- `Cut`: This field gives the cut grade of each diamond. There are five different grades for diamonds in this dataset. From worst grade to best grade, they are given as `fair`, `good`, `very good`, `premium`, and `ideal`. 
+- `Color`: For this dataset, diamonds are categorized as having one of seven colors: `D`, `E`, `F`, `G`, `H`, `I`, or `J`. Diamond color is organized in alphabetical order, where letters closer to the beginning of the alphabet are more colorless than letters closer to the end of the alphabet. These grades are also more broadly grouped where `D`, `E`, and `F` represent colorless diamonds and `G`, `H`, `I`, and `J` represent nearly colorless diamonds. 
+- `Clarity`: Diamond clarity represents the amount - or lack - of impurities visible on the surface of and in the interior of each diamond. Clarity is classified under 8 different fields, ranked from least clear to most clear as follows: `I1`, `SI2`, `SI1`, `VS2`, `VS1`, `VVS2`, `VVS1`, and `IF`.
+- `Depth`: The depth of a diamond is the measurement of the proportion of the height to the total width of the diamond. 
+- `Table`: The table value associated with each diamond is the proportion of the width of the flat top to the total width of the diamond. 
+- `Price`: This field is exactly as it sounds. This is some price, in US dollars,  associated with each diamond. 
+- `x`: This field represents the length of each diamond. 
+- `y`: This field represents the width of each diamond. 
+- `z`: This field represents the depth of each diamond. 
+
+
+## Data Analysis
+
+For use of this project, we will use the sample composed of the 500 randomly selected rows from the dataset, and we will examine the fields `carat`, `color`, `clarity`, `depth`, `table`, and `price`. We can create a variable called `sample` that retains only these data points for ease of analysis. 
+
+```{r Data Sample}
+set.seed(5)
+
+diamondSample <- diamondData[
+  sample(1:nrow(diamondData), 500), 
+  c("carat", "color", "clarity", "depth", "table", "price")
+]
+diamondSample
+```
+
+In order to give statistical summaries of the fields of interest, we must note that the `color` and `clarity` fields are purely qualitative and do not yield detailed numerical summaries, so we can instead examine a frequency table and barplot for each variable in order to conduct analyses. 
+
+```{r Color Analysis}
+colorTable <- table(diamondSample$color)
+colorPTable <- prop.table(colorTable)
+data.frame(
+  Color = names(colorTable),
+  Count = as.vector(colorTable),
+  Percentage = round(as.vector(colorPTable), 2)
+)
+
+ggplot(diamondSample, aes(x=color)) +
+  geom_bar() + 
+  xlab("Color") + 
+  ylab("Count") +
+  theme_minimal()
+```
+
+```{r Clarity Analysis}
+clarityTable <- table(diamondSample$clarity)
+clarityPTable <- prop.table(table(diamondSample$clarity))
+data.frame(
+  Clarity = names(clarityTable),
+  Count = as.vector(clarityTable),
+  Percentage = round(as.vector(clarityPTable), 2)
+)
+
+ggplot(diamondSample, aes(x = clarity)) + 
+  geom_bar() + 
+  xlab("Clarity") + 
+  ylab("Count") + 
+  theme_minimal()
+```
+
+From these diagrams, we can conclude that neither of these fields seem to be dominated by one value in our sample. 
+
+Now, for the quantitative analyses, we can import the `skimr` library and make use of the `skim` function that returns a much more visually pleasing and in depth summary of the data. Running this function with the sample data as the parameter, we get the following table. 
+
+```{r Skim}
+skim(diamondSample)
+```
+
+From this table we can see, not only the five number summary of each field, but also additional information such as the standard deviation (`sd`), the number of incomplete data points (`n_missing`), and a simple histogram of the distribution (`hist`). Notice that here the five number summary, which was given as the minimum, 1st quartile, median, 3rd quartile, and maximum by the `summary` function, are here given as the percentile values, `p0`, `p25`, `p50`, `p75`, and `p100` respectively. 
+
+Note that the `skim` function also returns a summary of the qualitative fields. While these summaries are not as detailed as the ones returned for the quantitative fields, we can still easily see the number of incomplete data points as well as the number of unique entries for each field. 
+
+In addition to these tables, we can also create what is called a pairplot of all the continuous variables in the sample. This will return a table of scatterplots between all the continuous variables with each other continuous variable. 
+
+```{r Pairplot}
+pairs(
+  diamondSample[c("carat", "depth", "table", "price")],
+  pch = 16, 
+  label = c("Carat", "Depth", "Table", "Price"),
+  main = "Pairplot of Continuous Variables"
+)
+```
+
+These plots allow us to examine different relationships between each variable. For instance, we can see a clear correlation between the carat measure of each diamond with its price. This idea can be further satisfied by find the actual correlation value as follows: 
+
+```{r}
+cor(diamondSample$carat, diamondSample$price)
+```
+
+Since the correlation value is close to one, we can say that these fields are closely related. 
+
+
+## Interesting Points
+
+**(1)** Briefly, observe that while the `table` field is technically continuous, as the entries can take any numerical value, most of them seem to be positive integer values. We will, however, continue to treat them as continuous. 
+
+**(2)** The next note about the taken sample is that the `carat` and `price` fields appear to be weighted heavily to the left. In order to get a better understanding of the distributions of these variables, we can create individual boxplots of the fields to run further analysis. 
+
+```{r Boxplots}
+ggplot(diamondSample, aes(x = carat, y = "")) + 
+  geom_boxplot() + 
+  xlab("Carat") + 
+  ylab("") +
+  theme_minimal()
+
+ggplot(diamondSample, aes(x = price)) + 
+  geom_boxplot() + 
+  xlab("Price") + 
+  ylab("") +
+  theme_minimal()
+```
+
+We can see here that both variables contain several outlier points. Although there are few of these points compared to the total number of points, they could have a disproportionate effect on the data. Specifically, there may be a small number of high caret diamonds with high prices within the chosen sample. 
+
+**(3)** Recall that the pairplot we made above revealed a correlation between the carat and price fields. Aside from this, the depth and table fields do not seem to be correlated with the price, as would have seemed natural. However, these fields do seem to share similar percentile values. We could potentially try to find a correlation between the ratio of depth to table and the price of each diamond to see if a certain size proportion is preferred to others, rather than analyzing then separately. 
+
+Let's briefly explore this idea. 
+
+```{r Correlations}
+cor(diamondSample$depth/diamondSample$table, diamondSample$price)
+
+ggplot(diamondSample, aes(x = depth/table, y = price)) + 
+  geom_point() + 
+  xlab("Depth to Table Ratio") + 
+  ylab("Price") + 
+  theme_minimal()
+```
+
+After a simple analysis, there does not appear to be a strong correlation between depth and table ratio with the price either, as the correlation value was close to zero and the plot does not seem to follow any sort of clear path. However, after further analysis, there could be other underlying relationships between these variables. For example, if there is such a low correlation between the price of the diamonds and these variables, it may be good to perform further analyses between price and other variables in the future. 
+
+**(4)** One final thing to note is that while this dataset does include a large number of data points with a vast range of characteristics, there are still more properties that these diamonds could have. For instance, we only have data on the top two color groups and, as well, we lack data from some of the lower tiered clarity classifications. While this does not make any of the data we are using less useful, it does mean that other analyses on other datasets could draw conclusions that may not be possible with our current data. 
+
+
+
+
+
+
+
+
+
+
